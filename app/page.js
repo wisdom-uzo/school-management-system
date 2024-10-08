@@ -1,9 +1,12 @@
 import Image from "next/image";
+import HomePage from "./components/HomePage";
 
 export default function Home() {
   return (
     <div className="">
-     
+     <main>
+      <HomePage />
+     </main>
 
       <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
         <a
