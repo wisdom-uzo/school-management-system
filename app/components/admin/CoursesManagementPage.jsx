@@ -4,62 +4,149 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Button, TextField, Dialog, DialogActions, DialogContent, DialogTitle,
   Typography, Box, FormControl, InputLabel, Select, MenuItem, Grid,
-  Chip, IconButton, Tooltip
+  Chip, IconButton, Tooltip, CircularProgress, Snackbar, Alert,
+  Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Search as SearchIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
+import { db } from '@/config/firebase';
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore/lite';
 import AdminLayout from './AdminLayout';
 
-// Assuming AdminLayout is a custom component you've created
-
-// Mock data for courses
-const mockCourses = [
-  { id: 1, code: 'CS101', title: 'Introduction to Programming', unit: 3, status: 'Core', department: 'Computer Science', level: 'ND', section: 'Year 1', semester: 1, session: '2023/2024' },
-  { id: 2, code: 'EE201', title: 'Circuit Theory', unit: 4, status: 'Core', department: 'Electrical Engineering', level: 'HND', section: 'Year 2', semester: 1, session: '2023/2024' },
-  { id: 3, code: 'BA101', title: 'Principles of Management', unit: 3, status: 'Core', department: 'Business Administration', level: 'ND', section: 'Year 1', semester: 2, session: '2023/2024' },
-  { id: 4, code: 'ME301', title: 'Thermodynamics', unit: 4, status: 'Core', department: 'Mechanical Engineering', level: 'HND', section: 'Year 1', semester: 1, session: '2023/2024' },
-];
-
 const CoursesManagementPage = () => {
-  const [courses, setCourses] = useState(mockCourses);
-  const [newCourse, setNewCourse] = useState({ code: '', title: '', unit: '', status: '', department: '', level: '', section: '', semester: '', session: '' });
+  const [courses, setCourses] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [academicPeriods, setAcademicPeriods] = useState([]);
+  const [newCourse, setNewCourse] = useState({
+    code: '',
+    title: '',
+    unit: '',
+    status: '',
+    department: '',
+    level: '',
+    academicPeriodId: '',
+    description: '',
+    prerequisites: []
+  });
   const [openDialog, setOpenDialog] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
   const [errors, setErrors] = useState({});
-  const [filters, setFilters] = useState({ department: '', level: '', section: '', semester: '', session: '' });
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      // Fetch courses
+      const coursesCollection = collection(db, 'courses');
+      const coursesSnapshot = await getDocs(coursesCollection);
+      const coursesList = coursesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setCourses(coursesList);
+
+      // Fetch departments
+      const departmentsCollection = collection(db, 'departments');
+      const departmentsSnapshot = await getDocs(departmentsCollection);
+      const departmentsList = departmentsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setDepartments(departmentsList);
+
+      // Fetch academic periods
+      const periodsCollection = collection(db, 'academic_periods');
+      const periodsSnapshot = await getDocs(periodsCollection);
+      const periodsList = periodsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAcademicPeriods(periodsList);
+    } catch (error) {
+      console.error("Error fetching data: ", error);
+      showSnackbar("Failed to fetch data", "error");
+    }
+    setIsLoading(false);
+  };
 
   const validateForm = () => {
     let tempErrors = {};
-    Object.keys(newCourse).forEach(key => {
-      tempErrors[key] = newCourse[key] ? "" : "This field is required.";
-    });
-    
-    // Check if code is unique
+    tempErrors.code = newCourse.code ? "" : "Course code is required.";
+    tempErrors.title = newCourse.title ? "" : "Course title is required.";
+    tempErrors.unit = newCourse.unit ? "" : "Course unit is required.";
+    tempErrors.status = newCourse.status ? "" : "Course status is required.";
+    tempErrors.department = newCourse.department ? "" : "Department is required.";
+    tempErrors.level = newCourse.level ? "" : "Level is required.";
+    tempErrors.academicPeriodId = newCourse.academicPeriodId ? "" : "Academic period is required.";
+
+    // Check if course code is unique
     if (newCourse.code && courses.some(course => course.code === newCourse.code && course.id !== editingCourse?.id)) {
-      tempErrors.code = "This code is already in use.";
+      tempErrors.code = "This course code is already in use.";
     }
 
     setErrors(tempErrors);
     return Object.values(tempErrors).every(x => x === "");
   };
 
-  const handleAddCourse = () => {
+  const handleAddCourse = async () => {
     if (validateForm()) {
-      if (editingCourse) {
-        setCourses(courses.map(course => 
-          course.id === editingCourse.id ? { ...newCourse, id: course.id } : course
-        ));
+      setIsLoading(true);
+      try {
+        if (editingCourse) {
+          const courseRef = doc(db, 'courses', editingCourse.id);
+          await updateDoc(courseRef, newCourse);
+          showSnackbar("Course updated successfully", "success");
+        } else {
+          await addDoc(collection(db, 'courses'), newCourse);
+          showSnackbar("New course added successfully", "success");
+        }
+        setNewCourse({
+          code: '',
+          title: '',
+          unit: '',
+          status: '',
+          department: '',
+          level: '',
+          academicPeriodId: '',
+          description: '',
+          prerequisites: []
+        });
+        setOpenDialog(false);
         setEditingCourse(null);
-      } else {
-        setCourses([...courses, { ...newCourse, id: courses.length + 1 }]);
+        await fetchData(); // Refresh the list
+      } catch (error) {
+        console.error("Error adding/updating course: ", error);
+        showSnackbar("Failed to save course", "error");
       }
-      setNewCourse({ code: '', title: '', unit: '', status: '', department: '', level: '', section: '', semester: '', session: '' });
-      setOpenDialog(false);
+      setIsLoading(false);
     }
   };
 
-  const handleDeleteCourse = (id) => {
-    setCourses(courses.filter(course => course.id !== id));
+  const handleDeleteCourse = async (id) => {
+    setConfirmDialog({
+      open: true,
+      title: "Delete Course",
+      message: "Are you sure you want to delete this course? This action cannot be undone.",
+      onConfirm: async () => {
+        setIsLoading(true);
+        try {
+          await deleteDoc(doc(db, 'courses', id));
+          await fetchData(); // Refresh the list
+          showSnackbar("Course deleted successfully", "success");
+        } catch (error) {
+          console.error("Error deleting course: ", error);
+          showSnackbar("Failed to delete course", "error");
+        }
+        setIsLoading(false);
+        setConfirmDialog({ ...confirmDialog, open: false });
+      }
+    });
   };
 
   const handleEditCourse = (course) => {
@@ -68,19 +155,19 @@ const CoursesManagementPage = () => {
     setOpenDialog(true);
   };
 
-  const filteredCourses = courses.filter(course => {
-    return Object.keys(filters).every(key => 
-      !filters[key] || course[key].toString().toLowerCase().includes(filters[key].toLowerCase())
-    ) && (
-      course.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      course.title.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
+  const showSnackbar = (message, severity) => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const filteredCourses = courses.filter(course => 
+    course.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    course.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <AdminLayout>
       <Box sx={{ p: 3 }}>
-        <Typography variant="h4" gutterBottom>
+        <Typography variant="h4" className='text-black' gutterBottom>
           Courses Management
         </Typography>
         
@@ -89,7 +176,7 @@ const CoursesManagementPage = () => {
             <TextField
               fullWidth
               variant="outlined"
-              label="Search by Course Code or Title"
+              label="Search Courses"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -107,7 +194,17 @@ const CoursesManagementPage = () => {
               startIcon={<AddIcon />}
               onClick={() => {
                 setEditingCourse(null);
-                setNewCourse({ code: '', title: '', unit: '', status: '', department: '', level: '', section: '', semester: '', session: '' });
+                setNewCourse({
+                  code: '',
+                  title: '',
+                  unit: '',
+                  status: '',
+                  department: '',
+                  level: '',
+                  academicPeriodId: '',
+                  description: '',
+                  prerequisites: []
+                });
                 setErrors({});
                 setOpenDialog(true);
               }}
@@ -117,126 +214,237 @@ const CoursesManagementPage = () => {
           </Grid>
         </Grid>
 
-        <Grid container spacing={2} sx={{ mb: 2 }}>
-          {['department', 'level', 'section', 'semester', 'session'].map((filter) => (
-            <Grid item xs={12} sm={6} md={2} key={filter}>
-              <FormControl fullWidth>
-                <InputLabel>{filter.charAt(0).toUpperCase() + filter.slice(1)}</InputLabel>
-                <Select
-                  value={filters[filter]}
-                  label={filter.charAt(0).toUpperCase() + filter.slice(1)}
-                  onChange={(e) => setFilters({ ...filters, [filter]: e.target.value })}
-                >
-                  <MenuItem value="">All</MenuItem>
-                  {[...new Set(courses.map(course => course[filter]))].map((value) => (
-                    <MenuItem value={value} key={value}>{value}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          ))}
-        </Grid>
-
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Code</TableCell>
-                <TableCell>Title</TableCell>
-                <TableCell>Unit</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Department</TableCell>
-                <TableCell>Level</TableCell>
-                <TableCell>Section</TableCell>
-                <TableCell>Semester</TableCell>
-                <TableCell>Session</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredCourses.map((course) => (
-                <TableRow key={course.id}>
-                  <TableCell>{course.code}</TableCell>
-                  <TableCell>{course.title}</TableCell>
-                  <TableCell>{course.unit}</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={course.status} 
-                      color={course.status === 'Core' ? 'primary' : 'secondary'}
-                    />
-                  </TableCell>
-                  <TableCell>{course.department}</TableCell>
-                  <TableCell>{course.level}</TableCell>
-                  <TableCell>{course.section}</TableCell>
-                  <TableCell>{course.semester}</TableCell>
-                  <TableCell>{course.session}</TableCell>
-                  <TableCell>
-                    <Tooltip title="Edit">
-                      <IconButton onClick={() => handleEditCourse(course)} size="small">
-                        <EditIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton onClick={() => handleDeleteCourse(course.id)} size="small" color="error">
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
+        {isLoading ? (
+          <CircularProgress />
+        ) : (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Code</TableCell>
+                  <TableCell>Title</TableCell>
+                  <TableCell>Unit</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Department</TableCell>
+                  <TableCell>Level</TableCell>
+                  <TableCell>Academic Period</TableCell>
+                  <TableCell>Actions</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {filteredCourses.map((course) => (
+                  <TableRow key={course.id}>
+                    <TableCell>{course.code}</TableCell>
+                    <TableCell>{course.title}</TableCell>
+                    <TableCell>{course.unit}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={course.status} 
+                        color={course.status === 'Core' ? 'primary' : 'secondary'}
+                      />
+                    </TableCell>
+                    <TableCell>{course.department}</TableCell>
+                    <TableCell>{course.level}</TableCell>
+                    <TableCell>{academicPeriods.find(p => p.id === course.academicPeriodId)?.name}</TableCell>
+                    <TableCell>
+                      <Tooltip title="Edit">
+                        <IconButton onClick={() => handleEditCourse(course)} size="small">
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete">
+                        <IconButton onClick={() => handleDeleteCourse(course.id)} size="small" color="error">
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
 
         <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
           <DialogTitle>{editingCourse ? 'Edit Course' : 'Add New Course'}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2}>
-              {['code', 'title', 'unit', 'status', 'department', 'level', 'section', 'semester', 'session'].map((field) => (
-                <Grid item xs={12} sm={6} key={field}>
-                  {field === 'status' || field === 'level' || field === 'semester' ? (
-                    <FormControl fullWidth margin="dense" error={!!errors[field]}>
-                      <InputLabel>{field.charAt(0).toUpperCase() + field.slice(1)}</InputLabel>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  autoFocus
+                  margin="dense"
+                  label="Course Code"
+                  fullWidth
+                  value={newCourse.code}
+                  onChange={(e) => setNewCourse({ ...newCourse, code: e.target.value })}
+                  error={!!errors.code}
+                  helperText={errors.code}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  margin="dense"
+                  label="Course Title"
+                  fullWidth
+                  value={newCourse.title}
+                  onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })}
+                  error={!!errors.title}
+                  helperText={errors.title}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  margin="dense"
+                  label="Course Unit"
+                  fullWidth
+                  type="number"
+                  value={newCourse.unit}
+                  onChange={(e) => setNewCourse({ ...newCourse, unit: e.target.value })}
+                  error={!!errors.unit}
+                  helperText={errors.unit}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth margin="dense" error={!!errors.status}>
+                  <InputLabel>Course Status</InputLabel>
+                  <Select
+                    value={newCourse.status}
+                    label="Course Status"
+                    onChange={(e) => setNewCourse({ ...newCourse, status: e.target.value })}
+                  >
+                    <MenuItem value="Core">Core</MenuItem>
+                    <MenuItem value="Elective">Elective</MenuItem>
+                  </Select>
+                  {errors.status && <Typography color="error">{errors.status}</Typography>}
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth margin="dense" error={!!errors.department}>
+                  <InputLabel>Department</InputLabel>
+                  <Select
+                    value={newCourse.department}
+                    label="Department"
+                    onChange={(e) => setNewCourse({ ...newCourse, department: e.target.value })}
+                  >
+                    {departments.map(dept => (
+                      <MenuItem value={dept.name} key={dept.id}>{dept.name}</MenuItem>
+                    ))}
+                  </Select>
+                  {errors.department && <Typography color="error">{errors.department}</Typography>}
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth margin="dense" error={!!errors.level}>
+                  <InputLabel>Level</InputLabel>
+                  <Select
+                    value={newCourse.level}
+                    label="Level"
+                    onChange={(e) => setNewCourse({ ...newCourse, level: e.target.value })}
+                  >
+                    <MenuItem value="ND1">ND1</MenuItem>
+                    <MenuItem value="ND2">ND2</MenuItem>
+                    <MenuItem value="HND1">HND1</MenuItem>
+                    <MenuItem value="HND2">HND2</MenuItem>
+                  </Select>
+                  {errors.level && <Typography color="error">{errors.level}</Typography>}
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth margin="dense" error={!!errors.academicPeriodId}>
+                  <InputLabel>Academic Period</InputLabel>
+                  <Select
+                    value={newCourse.academicPeriodId}
+                    label="Academic Period"
+                    onChange={(e) => setNewCourse({ ...newCourse, academicPeriodId: e.target.value })}
+                  >
+                    {academicPeriods.map(period => (
+                      <MenuItem value={period.id} key={period.id}>{`${period.name} - ${period.session}`}</MenuItem>
+                    ))}
+                  </Select>
+                  {errors.academicPeriodId && <Typography color="error">{errors.academicPeriodId}</Typography>}
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  margin="dense"
+                  label="Course Description"
+                  fullWidth
+                  multiline
+                  rows={4}
+                  value={newCourse.description}
+                  onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography>Prerequisites</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <FormControl fullWidth>
+                      <InputLabel>Prerequisites</InputLabel>
                       <Select
-                        value={newCourse[field]}
-                        label={field.charAt(0).toUpperCase() + field.slice(1)}
-                        onChange={(e) => setNewCourse({ ...newCourse, [field]: e.target.value })}
-                      >
-                        {field === 'status' && ['Core', 'Elective'].map(option => (
-                          <MenuItem value={option} key={option}>{option}</MenuItem>
+                        multiple
+                        value={newCourse.prerequisites}
+                        onChange={(e) => setNewCourse({ ...newCourse, prerequisites: e.target.value })}
+                        renderValue={(selected) => ( <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selected.map((value) => (
+                          <Chip key={value} label={courses.find(course => course.id === value)?.code} />
                         ))}
-                        {field === 'level' && ['ND', 'HND'].map(option => (
-                          <MenuItem value={option} key={option}>{option}</MenuItem>
-                        ))}
-                        {field === 'semester' && [1, 2].map(option => (
-                          <MenuItem value={option} key={option}>{option}</MenuItem>
-                        ))}
-                      </Select>
-                      {errors[field] && <Typography color="error">{errors[field]}</Typography>}
-                    </FormControl>
-                  ) : (
-                    <TextField
-                      fullWidth
-                      margin="dense"
-                      label={field.charAt(0).toUpperCase() + field.slice(1)}
-                      value={newCourse[field]}
-                      onChange={(e) => setNewCourse({ ...newCourse, [field]: e.target.value })}
-                      error={!!errors[field]}
-                      helperText={errors[field]}
-                    />
-                  )}
-                </Grid>
-              ))}
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-            <Button onClick={handleAddCourse}>{editingCourse ? 'Update' : 'Add'}</Button>
-          </DialogActions>
-        </Dialog>
-      </Box>
-    </AdminLayout>
-  );
+                      </Box>
+                    )}
+                  >
+                    {courses.filter(course => course.id !== editingCourse?.id).map((course) => (
+                      <MenuItem key={course.id} value={course.id}>
+                        {course.code} - {course.title}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </AccordionDetails>
+            </Accordion>
+          </Grid>
+        </Grid>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+        <Button onClick={handleAddCourse} disabled={isLoading}>
+          {isLoading ? <CircularProgress size={24} /> : (editingCourse ? 'Update' : 'Add')}
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    <Dialog
+      open={confirmDialog.open}
+      onClose={() => setConfirmDialog({ ...confirmDialog, open: false })}
+      aria-labelledby="alert-dialog-title"
+      aria-describedby="alert-dialog-description"
+    >
+      <DialogTitle id="alert-dialog-title">{confirmDialog.title}</DialogTitle>
+      <DialogContent>
+        <Typography id="alert-dialog-description">{confirmDialog.message}</Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>Cancel</Button>
+        <Button onClick={confirmDialog.onConfirm} color="error" autoFocus>
+          Confirm
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    <Snackbar 
+      open={snackbar.open} 
+      autoHideDuration={6000} 
+      onClose={() => setSnackbar({ ...snackbar, open: false })}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+    >
+      <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+        {snackbar.message}
+      </Alert>
+    </Snackbar>
+  </Box>
+</AdminLayout>
+);
 };
 
 export default CoursesManagementPage;

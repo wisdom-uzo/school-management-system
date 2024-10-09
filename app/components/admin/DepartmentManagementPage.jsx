@@ -98,7 +98,7 @@ const DepartmentManagementPage = () => {
   return (
     <AdminLayout>
       <Box sx={{ p: 3 }}>
-        <Typography variant="h4" gutterBottom>
+        <Typography variant="h4" className='text-black' gutterBottom>
           Department Management
         </Typography>
         

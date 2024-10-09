@@ -1,5 +1,5 @@
 import React from 'react'
-import StudentManagementPage from '../components/admin/StudentManagementPage'
+import StudentManagementPage from '../../components/admin/StudentManagementPage'
 
 const page = () => {
   return (

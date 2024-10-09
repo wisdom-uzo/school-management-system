@@ -1,5 +1,5 @@
 import React from 'react'
-import DepartmentManagementPage from '../components/admin/DepartmentManagementPage'
+import DepartmentManagementPage from '../../components/admin/DepartmentManagementPage'
 
 const page = () => {
   return (
