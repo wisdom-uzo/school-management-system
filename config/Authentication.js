@@ -16,26 +16,26 @@ export const comparePassword = async (password, hash) => {
   return bcrypt.compare(password, hash);
 };
 
-// export const generateToken = async (student) => {
-//     return await new jose.SignJWT({ id: student.id, email: student.email })
-//       .setProtectedHeader({ alg: 'HS256' })
-//       .setExpirationTime('1d')
-//       .sign(SECRET_KEY);
-//   };
-
-  export const generateToken = async (student) => {
-    const accessToken = await new jose.SignJWT({ id: student.id, email: student.email })
+export const generateToken = async (student) => {
+    return await new jose.SignJWT({ id: student.id, email: student.email })
       .setProtectedHeader({ alg: 'HS256' })
-      .setExpirationTime('15m') // Access token valid for 15 minutes
+      .setExpirationTime('1d')
       .sign(SECRET_KEY);
-  
-    const refreshToken = await new jose.SignJWT({ id: student.id, email: student.email })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setExpirationTime('7d') // Refresh token valid for 7 days
-      .sign(SECRET_KEY);
-  
-    return { accessToken, refreshToken };
   };
+
+//   export const generateToken = async (student) => {
+//     const accessToken = await new jose.SignJWT({ id: student.id, email: student.email })
+//       .setProtectedHeader({ alg: 'HS256' })
+//       .setExpirationTime('15m') // Access token valid for 15 minutes
+//       .sign(SECRET_KEY);
+  
+//     const refreshToken = await new jose.SignJWT({ id: student.id, email: student.email })
+//       .setProtectedHeader({ alg: 'HS256' })
+//       .setExpirationTime('7d') // Refresh token valid for 7 days
+//       .sign(SECRET_KEY);
+  
+//     return { accessToken, refreshToken };
+//   };
 
 export const verifyToken = async (token) => {
     try {
