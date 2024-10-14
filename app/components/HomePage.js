@@ -273,7 +273,8 @@ const HomePage = () => {
       <HeroSection>
         <Box sx={{ zIndex: 1, position: 'relative' }}>
           <Typography variant="h1" component="h1" gutterBottom sx={{ fontSize: { xs: '2.5rem', md: '4rem' } }}>
-            Welcome to Igbajo Polytechnic
+            Welcome to Igbajo Polytechnic OSUN State, Nigeria (Olivet Centre)
+
           </Typography>
           <Typography variant="h5" gutterBottom sx={{ mb: 4 }}>
             Empowering Minds, Shaping Futures
@@ -284,7 +285,7 @@ const HomePage = () => {
         </Box>
       </HeroSection>
 
-      <Container  maxWidth="lg" sx={{ mt: 8, mb: 8 }}>
+      <Container className='bg-gray-400' maxWidth="lg" sx={{ mt: 8, mb: 8 }}>
         <Grid container spacing={4}>
           <Grid item xs={12} md={3}>
             <InfoCard>
