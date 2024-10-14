@@ -77,6 +77,21 @@ export const getToken = async () => {
   return token;
 };
 
+// export const setToken = (token) => {
+//     if (isServer) {
+//       // Server-side token setting should be done in an API route or server action
+//       console.warn('Attempting to set token on server-side. This should be done in an API route.');
+//     } else {
+//       Cookies.set('authToken', token, { 
+//         expires: 1, // expires in 1 day
+//         secure: true, // only send cookie over HTTPS
+//         sameSite: 'Strict', // helps prevent CSRF
+//         httpOnly: true // restricts access from JavaScript
+//       });
+//       console.log('Token set on client:', token);
+//     }
+//   };
+
 export const setToken = (token) => {
   if (isServer) {
     // Server-side token setting should be done in an API route or server action

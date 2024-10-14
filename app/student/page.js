@@ -44,7 +44,6 @@ export default function StudentDashboard() {
         }
     
         const studentId = decodedToken.id;
-        console.log('Fetching data for student id:', studentId);
         const studentRef = doc(db, 'students', studentId);
         const studentSnap = await getDoc(studentRef);
     

@@ -4,127 +4,127 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Button, TextField, Dialog, DialogActions, DialogContent, DialogTitle,
   Typography, Box, FormControl, InputLabel, Select, MenuItem, Grid,
-  IconButton, Tooltip, CircularProgress, Snackbar, Alert, Calendar
+  IconButton, Tooltip, CircularProgress, Snackbar, Alert, Accordion, AccordionSummary, AccordionDetails,
+  Radio, RadioGroup, FormControlLabel
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Search as SearchIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
-import { db, auth } from '@/config/firebase';
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore/lite'; 
+import { db } from '@/config/firebase';
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore/lite'; 
 import AdminLayout from './AdminLayout';
 
-const AcademicCalendarManagementPage = () => { 
-  const [academicPeriods, setAcademicPeriods] = useState([]);
-  const [newPeriod, setNewPeriod] = useState({ name: '', session: '', startDate: null, endDate: null });
+const AcademicYearManagementPage = () => { 
+  const [academicYears, setAcademicYears] = useState([]);
+  const [newYear, setNewYear] = useState({ 
+    session: '', 
+    startDate: null, 
+    endDate: null,
+    ndActiveSemester: null,
+    hndActiveSemester: null,
+    ndCurrentLevel: 'ND1',
+    hndCurrentLevel: 'HND1'
+  });
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingPeriod, setEditingPeriod] = useState(null);
+  const [editingYear, setEditingYear] = useState(null);
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
-  const [userRole, setUserRole] = useState('user');
 
   useEffect(() => {
     fetchData();
-    //checkUserRole();
   }, []);
-
-//   const checkUserRole = async () => {
-//     // This is a placeholder. In a real app, you'd check the user's role from your authentication system
-//     // For example, you might have a 'roles' collection in Firestore
-//     const user = auth.currentUser;
-//     if (user) {
-//       // Assuming you have a 'roles' collection where documents are keyed by user ID
-//       const roleDoc = await getDocs(query(collection(db, 'roles'), where('userId', '==', user.uid)));
-//       if (!roleDoc.empty) {
-//         setUserRole(roleDoc.docs[0].data().role);
-//       }
-//     }
-//   };
-
+console.log(academicYears)
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const periodsCollection = collection(db, 'academic_periods');
-      const periodsSnapshot = await getDocs(periodsCollection);
-      const periodsList = periodsSnapshot.docs.map(doc => ({
+      const yearsCollection = collection(db, 'academic_years');
+      const yearsSnapshot = await getDocs(yearsCollection);
+      const yearsList = yearsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         startDate: doc.data().startDate.toDate(),
         endDate: doc.data().endDate.toDate()
       }));
-      setAcademicPeriods(periodsList);
+      setAcademicYears(yearsList);
     } catch (error) {
       console.error("Error fetching data: ", error);
-      showSnackbar("Failed to fetch academic periods", "error");
+      showSnackbar("Failed to fetch academic years", "error");
     }
     setIsLoading(false);
   };
 
   const validateForm = () => {
     let tempErrors = {};
-    tempErrors.name = newPeriod.name ? "" : "This field is required.";
-    tempErrors.session = newPeriod.session ? "" : "This field is required.";
-    tempErrors.startDate = newPeriod.startDate ? "" : "This field is required.";
-    tempErrors.endDate = newPeriod.endDate ? "" : "This field is required.";
+    tempErrors.session = newYear.session ? "" : "This field is required.";
+    tempErrors.startDate = newYear.startDate ? "" : "This field is required.";
+    tempErrors.endDate = newYear.endDate ? "" : "This field is required.";
     
-    if (newPeriod.startDate && newPeriod.endDate && newPeriod.startDate >= newPeriod.endDate) {
+    if (newYear.startDate && newYear.endDate && newYear.startDate >= newYear.endDate) {
       tempErrors.endDate = "End date must be after start date.";
     }
 
-    // Check for overlapping periods
-    const overlapping = academicPeriods.some(period => 
-      period.id !== editingPeriod?.id && 
-      ((newPeriod.startDate >= period.startDate && newPeriod.startDate <= period.endDate) ||
-       (newPeriod.endDate >= period.startDate && newPeriod.endDate <= period.endDate))
+    const overlapping = academicYears.some(year => 
+      year.id !== editingYear?.id && 
+      ((newYear.startDate >= year.startDate && newYear.startDate <= year.endDate) ||
+       (newYear.endDate >= year.startDate && newYear.endDate <= year.endDate))
     );
     if (overlapping) {
-      tempErrors.date = "This period overlaps with an existing period.";
+      tempErrors.date = "This year overlaps with an existing academic year.";
     }
 
     setErrors(tempErrors);
     return Object.values(tempErrors).every(x => x === "");
   };
 
-  const handleAddPeriod = async () => {
+  const handleAddYear = async () => {
     if (validateForm()) {
       setIsLoading(true);
       try {
-        if (editingPeriod) {
-          const periodRef = doc(db, 'academic_periods', editingPeriod.id);
-          await updateDoc(periodRef, newPeriod);
-          showSnackbar("Academic period updated successfully", "success");
+        if (editingYear) {
+          const yearRef = doc(db, 'academic_years', editingYear.id);
+          await updateDoc(yearRef, newYear);
+          showSnackbar("Academic year updated successfully", "success");
         } else {
-          await addDoc(collection(db, 'academic_periods'), newPeriod);
-          showSnackbar("New academic period added successfully", "success");
+          await addDoc(collection(db, 'academic_years'), newYear);
+          showSnackbar("New academic year added successfully", "success");
         }
-        setNewPeriod({ name: '', session: '', startDate: null, endDate: null });
+        setNewYear({ 
+          session: '', 
+          startDate: null, 
+          endDate: null,
+          ndActiveSemester: null,
+          hndActiveSemester: null,
+          ndCurrentLevel: 'ND1',
+          hndCurrentLevel: 'HND1'
+        });
         setOpenDialog(false);
-        setEditingPeriod(null);
+        setEditingYear(null);
         await fetchData(); // Refresh the list
       } catch (error) {
-        console.error("Error adding/updating period: ", error);
-        showSnackbar("Failed to save academic period", "error");
+        console.error("Error adding/updating year: ", error);
+        showSnackbar("Failed to save academic year", "error");
       }
       setIsLoading(false);
     }
   };
 
-  const handleDeletePeriod = async (id) => {
+  const handleDeleteYear = async (id) => {
     setConfirmDialog({
       open: true,
-      title: "Delete Academic Period",
-      message: "Are you sure you want to delete this academic period? This action cannot be undone.",
+      title: "Delete Academic Year",
+      message: "Are you sure you want to delete this academic year? This action cannot be undone.",
       onConfirm: async () => {
         setIsLoading(true);
         try {
-          await deleteDoc(doc(db, 'academic_periods', id));
+          await deleteDoc(doc(db, 'academic_years', id));
           await fetchData(); // Refresh the list
-          showSnackbar("Academic period deleted successfully", "success");
+          showSnackbar("Academic year deleted successfully", "success");
         } catch (error) {
-          console.error("Error deleting period: ", error);
-          showSnackbar("Failed to delete academic period", "error");
+          console.error("Error deleting year: ", error);
+          showSnackbar("Failed to delete academic year", "error");
         }
         setIsLoading(false);
         setConfirmDialog({ ...confirmDialog, open: false });
@@ -132,35 +132,67 @@ const AcademicCalendarManagementPage = () => {
     });
   };
 
-  const handleEditPeriod = (period) => {
-    setEditingPeriod(period);
-    setNewPeriod({ 
-      name: period.name, 
-      session: period.session, 
-      startDate: period.startDate, 
-      endDate: period.endDate 
-    });
+  const handleEditYear = (year) => {
+    setEditingYear(year);
+    setNewYear({ ...year });
     setOpenDialog(true);
+  };
+
+  const handleActiveSemesterChange = (program, value) => {
+    setNewYear(prev => ({
+      ...prev,
+      [program === 'ND' ? 'ndActiveSemester' : 'hndActiveSemester']: value
+    }));
+  };
+
+  const handlePromoteLevel = async (yearId, program) => {
+    const year = academicYears.find(y => y.id === yearId);
+    if (!year) return;
+
+    let newLevel;
+    if (program === 'ND') {
+      newLevel = year.ndCurrentLevel === 'ND1' ? 'ND2' : 'ND1';
+    } else {
+      newLevel = year.hndCurrentLevel === 'HND1' ? 'HND2' : 'HND1';
+    }
+
+    setConfirmDialog({
+      open: true,
+      title: `Promote ${program} Students`,
+      message: `Are you sure you want to promote ${program} students to ${newLevel}?`,
+      onConfirm: async () => {
+        setIsLoading(true);
+        try {
+          const yearRef = doc(db, 'academic_years', yearId);
+          await updateDoc(yearRef, {
+            [`${program.toLowerCase()}CurrentLevel`]: newLevel
+          });
+          showSnackbar(`${program} students promoted to ${newLevel} successfully`, "success");
+          await fetchData(); // Refresh the list
+        } catch (error) {
+          console.error("Error promoting students: ", error);
+          showSnackbar(`Failed to promote ${program} students`, "error");
+        }
+        setIsLoading(false);
+        setConfirmDialog({ ...confirmDialog, open: false });
+      }
+    });
   };
 
   const showSnackbar = (message, severity) => {
     setSnackbar({ open: true, message, severity });
   };
 
-  const filteredPeriods = academicPeriods.filter(period => 
-    period.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    period.session.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredYears = academicYears.filter(year => 
+    year.session.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  const canEdit = true
-  //userRole === 'admin' || userRole === 'academic_officer';
 
   return (
     <AdminLayout>
       <LocalizationProvider dateAdapter={AdapterDateFns}>
         <Box sx={{ p: 3 }}>
           <Typography variant="h4" className='text-black' gutterBottom>
-            Academic Calendar Management
+            Academic Year Management
           </Typography>
           
           <Grid container spacing={2} sx={{ mb: 2 }}>
@@ -168,7 +200,7 @@ const AcademicCalendarManagementPage = () => {
               <TextField
                 fullWidth
                 variant="outlined"
-                label="Search Academic Periods"
+                label="Search Academic Years"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 InputProps={{
@@ -181,20 +213,26 @@ const AcademicCalendarManagementPage = () => {
               />
             </Grid>
             <Grid item xs={12} md={6}>
-              {canEdit && (
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => {
-                    setEditingPeriod(null);
-                    setNewPeriod({ name: '', session: '', startDate: null, endDate: null });
-                    setErrors({});
-                    setOpenDialog(true);
-                  }}
-                >
-                  Add New Academic Period
-                </Button>
-              )}
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setEditingYear(null);
+                  setNewYear({ 
+                    session: '', 
+                    startDate: null, 
+                    endDate: null,
+                    ndActiveSemester: null,
+                    hndActiveSemester: null,
+                    ndCurrentLevel: 'ND1',
+                    hndCurrentLevel: 'HND1'
+                  });
+                  setErrors({});
+                  setOpenDialog(true);
+                }}
+              >
+                Add New Academic Year
+              </Button>
             </Grid>
           </Grid>
 
@@ -205,34 +243,56 @@ const AcademicCalendarManagementPage = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Name</TableCell>
                     <TableCell>Session</TableCell>
                     <TableCell>Start Date</TableCell>
                     <TableCell>End Date</TableCell>
-                    {canEdit && <TableCell>Actions</TableCell>}
+                    <TableCell>ND Active Semester</TableCell>
+                    <TableCell>HND Active Semester</TableCell>
+                    <TableCell>ND Current Level</TableCell>
+                    <TableCell>HND Current Level</TableCell>
+                    <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredPeriods.map((period) => (
-                    <TableRow key={period.id}>
-                      <TableCell>{period.name}</TableCell>
-                      <TableCell>{period.session}</TableCell>
-                      <TableCell>{period.startDate.toLocaleDateString()}</TableCell>
-                      <TableCell>{period.endDate.toLocaleDateString()}</TableCell>
-                      {canEdit && (
-                        <TableCell>
-                          <Tooltip title="Edit">
-                            <IconButton onClick={() => handleEditPeriod(period)} size="small">
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete">
-                            <IconButton onClick={() => handleDeletePeriod(period.id)} size="small" color="error">
-                              <DeleteIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      )}
+                  {filteredYears.map((year) => (
+                    <TableRow key={year.id}>
+                      <TableCell>{year.session}</TableCell>
+                      <TableCell>{year.startDate.toLocaleDateString()}</TableCell>
+                      <TableCell>{year.endDate.toLocaleDateString()}</TableCell>
+                      <TableCell>{year.ndActiveSemester || 'Not set'}</TableCell>
+                      <TableCell>{year.hndActiveSemester || 'Not set'}</TableCell>
+                      <TableCell>
+                        {year.ndCurrentLevel}
+                        <Button 
+                          size="small" 
+                          onClick={() => handlePromoteLevel(year.id, 'ND')}
+                          sx={{ ml: 1 }}
+                        >
+                          Promote
+                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        {year.hndCurrentLevel}
+                        <Button 
+                          size="small" 
+                          onClick={() => handlePromoteLevel(year.id, 'HND')}
+                          sx={{ ml: 1 }}
+                        >
+                          Promote
+                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title="Edit">
+                          <IconButton onClick={() => handleEditYear(year)} size="small">
+                            <EditIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton onClick={() => handleDeleteYear(year.id)} size="small" color="error">
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -240,75 +300,96 @@ const AcademicCalendarManagementPage = () => {
             </TableContainer>
           )}
 
-          <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
-            <DialogTitle>{editingPeriod ? 'Edit' : 'Add New'} Academic Period</DialogTitle>
+          <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+            <DialogTitle>{editingYear ? 'Edit' : 'Add New'} Academic Year</DialogTitle>
             <DialogContent>
               <TextField
                 autoFocus
                 margin="dense"
-                label="Name (e.g., First Semester)"
-                fullWidth
-                value={newPeriod.name}
-                onChange={(e) => setNewPeriod({ ...newPeriod, name: e.target.value })}
-                error={!!errors.name}
-                helperText={errors.name}
-              />
-              <TextField
-                margin="dense"
                 label="Session (e.g., 2024/2025)"
                 fullWidth
-                value={newPeriod.session}
-                onChange={(e) => setNewPeriod({ ...newPeriod, session: e.target.value })}
+                value={newYear.session}
+                onChange={(e) => setNewYear({ ...newYear, session: e.target.value })}
                 error={!!errors.session}
                 helperText={errors.session}
               />
               <DatePicker
                 label="Start Date"
-                value={newPeriod.startDate}
-                onChange={(date) => setNewPeriod({ ...newPeriod, startDate: date })}
+                value={newYear.startDate}
+                onChange={(date) => setNewYear({ ...newYear, startDate: date })}
                 renderInput={(params) => <TextField {...params} fullWidth margin="dense" error={!!errors.startDate} helperText={errors.startDate} />}
               />
               <DatePicker
                 label="End Date"
-                value={newPeriod.endDate}
-                onChange={(date) => setNewPeriod({ ...newPeriod, endDate: date })}
+                value={newYear.endDate}
+                onChange={(date) => setNewYear({ ...newYear, endDate: date })}
                 renderInput={(params) => <TextField {...params} fullWidth margin="dense" error={!!errors.endDate} helperText={errors.endDate} />}
               />
               {errors.date && <Typography color="error">{errors.date}</Typography>}
+
+              <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>Active Semesters</Typography>
+              <Accordion>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography>ND Active Semester</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <RadioGroup
+                    value={newYear.ndActiveSemester}
+                    onChange={(e) => handleActiveSemesterChange('ND', e.target.value)}
+                  >
+                    <FormControlLabel value="1st Semester" control={<Radio />} label="1st Semester" />
+                    <FormControlLabel value="2nd Semester" control={<Radio />} label="2nd Semester" />
+                  </RadioGroup>
+                </AccordionDetails>
+              </Accordion>
+              <Accordion>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography>HND Active Semester</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <RadioGroup
+                    value={newYear.hndActiveSemester}
+                    onChange={(e) => handleActiveSemesterChange('HND', e.target.value)}
+                  >
+                    <FormControlLabel value="1st Semester" control={<Radio />} label="1st Semester" />
+                    <FormControlLabel value="2nd Semester" control={<Radio />} label="2nd Semester" />
+                  </RadioGroup>
+                </AccordionDetails>
+              </Accordion>
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-              <Button onClick={handleAddPeriod} disabled={isLoading}>
-                {isLoading ? <CircularProgress size={24} /> : (editingPeriod ? 'Update' : 'Add')}
+              <Button onClick={handleAddYear} disabled={isLoading}>
+                {isLoading ? <CircularProgress size={24} /> : (editingYear ? 'Update' : 'Add')}
               </Button>
             </DialogActions>
           </Dialog>
 
-          <Dialog
-            open={confirmDialog.open}
-            onClose={() => setConfirmDialog({ ...confirmDialog, open: false })}
-          >
-            <DialogTitle>{confirmDialog.title}</DialogTitle>
-            <DialogContent>{confirmDialog.message}</DialogContent>
-            <DialogActions>
-              <Button onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>Cancel</Button>
-              <Button onClick={confirmDialog.onConfirm} color="error">Confirm</Button>
-            </DialogActions>
-          </Dialog>
+         <Dialog
+          open={confirmDialog.open}
+          onClose={() => setConfirmDialog({ ...confirmDialog, open: false })}
+        >
+          <DialogTitle>{confirmDialog.title}</DialogTitle>
+          <DialogContent>{confirmDialog.message}</DialogContent>
+          <DialogActions>
+            <Button onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>Cancel</Button>
+            <Button onClick={confirmDialog.onConfirm} color="primary" variant="contained">Confirm</Button>
+          </DialogActions>
+        </Dialog>
 
-          <Snackbar 
-            open={snackbar.open} 
-            autoHideDuration={6000} 
-            onClose={() => setSnackbar({ ...snackbar, open: false })}
-          >
-            <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
-              {snackbar.message}
-            </Alert>
-          </Snackbar>
-        </Box>
-      </LocalizationProvider>
-    </AdminLayout>
-  );
+        <Snackbar 
+          open={snackbar.open} 
+          autoHideDuration={6000} 
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+        >
+          <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </Box>
+    </LocalizationProvider>
+  </AdminLayout>
+);
 };
 
-export default AcademicCalendarManagementPage;
+export default AcademicYearManagementPage;

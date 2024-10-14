@@ -36,9 +36,9 @@ const Sidebar = () => {
   }, []);
 
   const navItems = [
-    { name: 'Dashboard', href: '/student/dashboard', icon: HomeIcon },
+    { name: 'Dashboard', href: '/student', icon: HomeIcon },
     { name: 'Courses', href: '/student/courses', icon: BookOpenIcon },
-    { name: 'Schedule', href: '/student/schedule', icon: CalendarIcon },
+    { name: 'idcard', href: '/student/idcard', icon: CalendarIcon },
     { name: 'Grades', href: '/student/grades', icon: ClipboardDocumentListIcon },
     { name: 'Settings', href: '/student/settings', icon: CogIcon },
   ];

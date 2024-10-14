@@ -9,13 +9,13 @@ import {
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 import { db } from '@/config/firebase';
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore/lite';
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore/lite';
 import AdminLayout from './AdminLayout';
 
 const CoursesManagementPage = () => {
   const [courses, setCourses] = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [academicPeriods, setAcademicPeriods] = useState([]);
+  const [academicYears, setAcademicYears] = useState([]);
   const [newCourse, setNewCourse] = useState({
     code: '',
     title: '',
@@ -23,7 +23,8 @@ const CoursesManagementPage = () => {
     status: '',
     department: '',
     level: '',
-    academicPeriodId: '',
+    semester: '',
+    academicYearId: '',
     description: '',
     prerequisites: []
   });
@@ -44,7 +45,8 @@ const CoursesManagementPage = () => {
     try {
       // Fetch courses
       const coursesCollection = collection(db, 'courses');
-      const coursesSnapshot = await getDocs(coursesCollection);
+      const coursesQuery = query(coursesCollection, orderBy('createdAt', 'desc'));
+      const coursesSnapshot = await getDocs(coursesQuery);
       const coursesList = coursesSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -60,14 +62,14 @@ const CoursesManagementPage = () => {
       }));
       setDepartments(departmentsList);
 
-      // Fetch academic periods
-      const periodsCollection = collection(db, 'academic_periods');
-      const periodsSnapshot = await getDocs(periodsCollection);
-      const periodsList = periodsSnapshot.docs.map(doc => ({
+      // Fetch academic years
+      const yearsCollection = collection(db, 'academic_years');
+      const yearsSnapshot = await getDocs(yearsCollection);
+      const yearsList = yearsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      setAcademicPeriods(periodsList);
+      setAcademicYears(yearsList);
     } catch (error) {
       console.error("Error fetching data: ", error);
       showSnackbar("Failed to fetch data", "error");
@@ -83,7 +85,8 @@ const CoursesManagementPage = () => {
     tempErrors.status = newCourse.status ? "" : "Course status is required.";
     tempErrors.department = newCourse.department ? "" : "Department is required.";
     tempErrors.level = newCourse.level ? "" : "Level is required.";
-    tempErrors.academicPeriodId = newCourse.academicPeriodId ? "" : "Academic period is required.";
+    tempErrors.semester = newCourse.semester ? "" : "Semester is required.";
+    tempErrors.academicYearId = newCourse.academicYearId ? "" : "Academic year is required.";
 
     // Check if course code is unique
     if (newCourse.code && courses.some(course => course.code === newCourse.code && course.id !== editingCourse?.id)) {
@@ -98,12 +101,17 @@ const CoursesManagementPage = () => {
     if (validateForm()) {
       setIsLoading(true);
       try {
+        const courseData = {
+          ...newCourse,
+          createdAt: new Date()
+        };
+        
         if (editingCourse) {
           const courseRef = doc(db, 'courses', editingCourse.id);
-          await updateDoc(courseRef, newCourse);
+          await updateDoc(courseRef, courseData);
           showSnackbar("Course updated successfully", "success");
         } else {
-          await addDoc(collection(db, 'courses'), newCourse);
+          await addDoc(collection(db, 'courses'), courseData);
           showSnackbar("New course added successfully", "success");
         }
         setNewCourse({
@@ -113,7 +121,8 @@ const CoursesManagementPage = () => {
           status: '',
           department: '',
           level: '',
-          academicPeriodId: '',
+          semester: '',
+          academicYearId: '',
           description: '',
           prerequisites: []
         });
@@ -201,7 +210,8 @@ const CoursesManagementPage = () => {
                   status: '',
                   department: '',
                   level: '',
-                  academicPeriodId: '',
+                  semester: '',
+                  academicYearId: '',
                   description: '',
                   prerequisites: []
                 });
@@ -227,7 +237,8 @@ const CoursesManagementPage = () => {
                   <TableCell>Status</TableCell>
                   <TableCell>Department</TableCell>
                   <TableCell>Level</TableCell>
-                  <TableCell>Academic Period</TableCell>
+                  <TableCell>Semester</TableCell>
+                  <TableCell>Academic Year</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -245,7 +256,8 @@ const CoursesManagementPage = () => {
                     </TableCell>
                     <TableCell>{course.department}</TableCell>
                     <TableCell>{course.level}</TableCell>
-                    <TableCell>{academicPeriods.find(p => p.id === course.academicPeriodId)?.name}</TableCell>
+                    <TableCell>{course.semester}</TableCell>
+                    <TableCell>{academicYears.find(y => y.id === course.academicYearId)?.session}</TableCell>
                     <TableCell>
                       <Tooltip title="Edit">
                         <IconButton onClick={() => handleEditCourse(course)} size="small">
@@ -349,102 +361,117 @@ const CoursesManagementPage = () => {
                   {errors.level && <Typography color="error">{errors.level}</Typography>}
                 </FormControl>
               </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth margin="dense" error={!!errors.academicPeriodId}>
-                  <InputLabel>Academic Period</InputLabel>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth margin="dense" error={!!errors.semester}>
+                  <InputLabel>Semester</InputLabel>
                   <Select
-                    value={newCourse.academicPeriodId}
-                    label="Academic Period"
-                    onChange={(e) => setNewCourse({ ...newCourse, academicPeriodId: e.target.value })}
+                    value={newCourse.semester}
+                    label="Semester"
+                    onChange={(e) => setNewCourse({ ...newCourse, semester: e.target.value })}
                   >
-                    {academicPeriods.map(period => (
-                      <MenuItem value={period.id} key={period.id}>{`${period.name} - ${period.session}`}</MenuItem>
-                    ))}
+                    <MenuItem value="1">First Semester</MenuItem>
+                    <MenuItem value="2">Second Semester</MenuItem>
                   </Select>
-                  {errors.academicPeriodId && <Typography color="error">{errors.academicPeriodId}</Typography>}
+                  {errors.semester && <Typography color="error">{errors.semester}</Typography>}
                 </FormControl>
               </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  margin="dense"
-                  label="Course Description"
-                  fullWidth
-                  multiline
-                  rows={4}
-                  value={newCourse.description}
-                  onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Accordion>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography>Prerequisites</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <FormControl fullWidth>
-                      <InputLabel>Prerequisites</InputLabel>
-                      <Select
-                        multiple
-                        value={newCourse.prerequisites}
-                        onChange={(e) => setNewCourse({ ...newCourse, prerequisites: e.target.value })}
-                        renderValue={(selected) => ( <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {selected.map((value) => (
-                          <Chip key={value} label={courses.find(course => course.id === value)?.code} />
-                        ))}
-                      </Box>
-                    )}
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth margin="dense" error={!!errors.academicYearId}>
+                  <InputLabel>Academic Year</InputLabel>
+                  <Select
+                    value={newCourse.academicYearId}
+                    label="Academic Year"
+                    onChange={(e) => setNewCourse({ ...newCourse, academicYearId: e.target.value })}
                   >
-                    {courses.filter(course => course.id !== editingCourse?.id).map((course) => (
-                      <MenuItem key={course.id} value={course.id}>
-                        {course.code} - {course.title}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </AccordionDetails>
-            </Accordion>
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-        <Button onClick={handleAddCourse} disabled={isLoading}>
-          {isLoading ? <CircularProgress size={24} /> : (editingCourse ? 'Update' : 'Add')}
-        </Button>
-      </DialogActions>
-    </Dialog>
-
-    <Dialog
-      open={confirmDialog.open}
-      onClose={() => setConfirmDialog({ ...confirmDialog, open: false })}
-      aria-labelledby="alert-dialog-title"
-      aria-describedby="alert-dialog-description"
-    >
-      <DialogTitle id="alert-dialog-title">{confirmDialog.title}</DialogTitle>
-      <DialogContent>
-        <Typography id="alert-dialog-description">{confirmDialog.message}</Typography>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>Cancel</Button>
-        <Button onClick={confirmDialog.onConfirm} color="error" autoFocus>
-          Confirm
-        </Button>
-      </DialogActions>
-    </Dialog>
-
-    <Snackbar 
-      open={snackbar.open} 
-      autoHideDuration={6000} 
-      onClose={() => setSnackbar({ ...snackbar, open: false })}
-      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-    >
-      <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
-        {snackbar.message}
-      </Alert>
-    </Snackbar>
-  </Box>
-</AdminLayout>
-);
-};
-
-export default CoursesManagementPage;
+                    {academicYears.map(year => (
+                        <MenuItem value={year.id} key={year.id}>{year.session}</MenuItem>
+                      ))}
+                    </Select>
+                    {errors.academicYearId && <Typography color="error">{errors.academicYearId}</Typography>}
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    margin="dense"
+                    label="Course Description"
+                    fullWidth
+                    multiline
+                    rows={4}
+                    value={newCourse.description}
+                    onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography>Prerequisites</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <FormControl fullWidth>
+                        <InputLabel>Prerequisites</InputLabel>
+                        <Select
+                          multiple
+                          value={newCourse.prerequisites}
+                          onChange={(e) => setNewCourse({ ...newCourse, prerequisites: e.target.value })}
+                          renderValue={(selected) => (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {selected.map((value) => (
+                                <Chip key={value} label={courses.find(course => course.id === value)?.code} />
+                              ))}
+                            </Box>
+                          )}
+                        >
+                          {courses.filter(course => course.id !== editingCourse?.id).map((course) => (
+                            <MenuItem key={course.id} value={course.id}>
+                              {course.code} - {course.title}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </AccordionDetails>
+                  </Accordion>
+                </Grid>
+              </Grid>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+              <Button onClick={handleAddCourse} disabled={isLoading}>
+                {isLoading ? <CircularProgress size={24} /> : (editingCourse ? 'Update' : 'Add')}
+              </Button>
+            </DialogActions>
+          </Dialog>
+  
+          <Dialog
+            open={confirmDialog.open}
+            onClose={() => setConfirmDialog({ ...confirmDialog, open: false })}
+            aria-labelledby="alert-dialog-title"
+            aria-describedby="alert-dialog-description"
+          >
+            <DialogTitle id="alert-dialog-title">{confirmDialog.title}</DialogTitle>
+            <DialogContent>
+              <Typography id="alert-dialog-description">{confirmDialog.message}</Typography>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>Cancel</Button>
+              <Button onClick={confirmDialog.onConfirm} color="error" autoFocus>
+                Confirm
+              </Button>
+            </DialogActions>
+          </Dialog>
+  
+          <Snackbar 
+            open={snackbar.open} 
+            autoHideDuration={6000} 
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          >
+            <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+              {snackbar.message}
+            </Alert>
+          </Snackbar>
+        </Box>
+      </AdminLayout>
+    );
+  };
+  
+  export default CoursesManagementPage;

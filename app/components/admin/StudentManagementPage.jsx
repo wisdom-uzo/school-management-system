@@ -8,15 +8,17 @@ import {
   InputLabel, Select, MenuItem, IconButton, Tooltip, Snackbar,
   Alert, TablePagination, TableSortLabel, Checkbox, Accordion,
   AccordionSummary, AccordionDetails, Chip, Card, CardContent,
-  CardMedia, Tabs, Tab
+  CardMedia, Tabs, Tab, AppBar, Toolbar, Avatar, Divider
 } from '@mui/material';
+import { styled, alpha } from '@mui/material/styles';
 import { 
   Add as AddIcon, 
   Edit as EditIcon, 
   Delete as DeleteIcon,
   Search as SearchIcon,
   ExpandMore as ExpandMoreIcon,
-  FileDownload as FileDownloadIcon
+  FileDownload as FileDownloadIcon,
+  School as SchoolIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -24,24 +26,73 @@ import { db, storage } from '@/config/firebase';
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, orderBy as firestoreOrderBy, limit, writeBatch } from 'firebase/firestore/lite';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';    
 import AdminLayout from './AdminLayout';
-import { debounce } from 'lodash';
+
+// Styled components for a cooler look
+const StyledAppBar = styled(AppBar)(({ theme }) => ({
+  background: theme.palette.background.paper,
+  color: theme.palette.text.primary,
+  boxShadow: 'none',
+  borderBottom: `1px solid ${theme.palette.divider}`,
+}));
+
+const StyledSearch = styled('div')(({ theme }) => ({
+  position: 'relative',
+  borderRadius: theme.shape.borderRadius,
+  backgroundColor: alpha(theme.palette.common.white, 0.15),
+  '&:hover': {
+    backgroundColor: alpha(theme.palette.common.white, 0.25),
+  },
+  marginRight: theme.spacing(2),
+  marginLeft: 0,
+  width: '100%',
+  [theme.breakpoints.up('sm')]: {
+    marginLeft: theme.spacing(3),
+    width: 'auto',
+  },
+}));
+
+const SearchIconWrapper = styled('div')(({ theme }) => ({
+  padding: theme.spacing(0, 2),
+  height: '100%',
+  position: 'absolute',
+  pointerEvents: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+}));
+
+const StyledInputBase = styled(TextField)(({ theme }) => ({
+  color: 'inherit',
+  '& .MuiInputBase-input': {
+    padding: theme.spacing(1, 1, 1, 0),
+    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
+    transition: theme.transitions.create('width'),
+    width: '100%',
+    [theme.breakpoints.up('md')]: {
+      width: '20ch',
+    },
+  },
+}));
 
 const StudentManagementPage = () => {
   const [students, setStudents] = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [academicPeriods, setAcademicPeriods] = useState([]);
+  const [academicYears, setAcademicYears] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [newStudent, setNewStudent] = useState({
     firstName: '',
     middleName: '',
     surname: '',
+    gender: '',
     dob: null,
     email: '',
+    phoneNumber: '',
+    maritalStatus: '',
+    permanentAddress: '',
     department: '',
+    academicYearId: '',
     level: '',
-    academicPeriodId: '',
-    admissionYear: '',
     programType: '',
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -55,6 +106,7 @@ const StudentManagementPage = () => {
   const [photoFile, setPhotoFile] = useState(null);
   const [filters, setFilters] = useState({
     department: '',
+    academicYear: '',
     level: '',
     searchTerm: '',
   });
@@ -63,22 +115,22 @@ const StudentManagementPage = () => {
   const [selectedProfileStudent, setSelectedProfileStudent] = useState(null);
 
   useEffect(() => {
-    fetchDepartmentsAndAcademicPeriods();
+    fetchDepartmentsAndAcademicYears();
     fetchStudents();
   }, [page, rowsPerPage, orderByField, orderDirection, filters]);
 
-  const fetchDepartmentsAndAcademicPeriods = async () => {
+  const fetchDepartmentsAndAcademicYears = async () => {
     try {
       const departmentsSnapshot = await getDocs(collection(db, 'departments'));
       const departmentsData = departmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setDepartments(departmentsData);
 
-      const academicPeriodsSnapshot = await getDocs(collection(db, 'academic_periods'));
-      const academicPeriodsData = academicPeriodsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAcademicPeriods(academicPeriodsData);
+      const academicYearsSnapshot = await getDocs(collection(db, 'academic_years'));
+      const academicYearsData = academicYearsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAcademicYears(academicYearsData);
     } catch (error) {
-      console.error("Error fetching departments and academic periods:", error);
-      showSnackbar("Failed to fetch departments and academic periods", "error");
+      console.error("Error fetching departments and academic years:", error);
+      showSnackbar("Failed to fetch departments and academic years", "error");
     }
   };
 
@@ -93,6 +145,9 @@ const StudentManagementPage = () => {
 
       if (filters.department) {
         studentsQuery = query(studentsQuery, where('department', '==', filters.department));
+      }
+      if (filters.academicYear) {
+        studentsQuery = query(studentsQuery, where('academicYearId', '==', filters.academicYear));
       }
       if (filters.level) {
         studentsQuery = query(studentsQuery, where('level', '==', filters.level));
@@ -135,12 +190,15 @@ const StudentManagementPage = () => {
     let tempErrors = {};
     tempErrors.firstName = newStudent.firstName ? "" : "First Name is required";
     tempErrors.surname = newStudent.surname ? "" : "Surname is required";
+    tempErrors.gender = newStudent.gender ? "" : "Gender is required";
     tempErrors.dob = newStudent.dob ? "" : "Date of Birth is required";
     tempErrors.email = /\S+@\S+\.\S+/.test(newStudent.email) ? "" : "Email is invalid";
+    tempErrors.phoneNumber = /^\d{11}$/.test(newStudent.phoneNumber) ? "" : "Phone Number must be 11 digits";
+    tempErrors.maritalStatus = newStudent.maritalStatus ? "" : "Marital Status is required";
+    tempErrors.permanentAddress = newStudent.permanentAddress ? "" : "Permanent Address is required";
     tempErrors.department = newStudent.department ? "" : "Department is required";
+    tempErrors.academicYearId = newStudent.academicYearId ? "" : "Academic Year is required";
     tempErrors.level = newStudent.level ? "" : "Level is required";
-    tempErrors.academicPeriodId = newStudent.academicPeriodId ? "" : "Academic Period is required";
-    tempErrors.admissionYear = /^\d{4}$/.test(newStudent.admissionYear) ? "" : "Admission Year must be a 4-digit number";
     tempErrors.programType = newStudent.programType ? "" : "Program Type is required";
 
     setErrors(tempErrors);
@@ -151,7 +209,7 @@ const StudentManagementPage = () => {
     if (validateForm()) {
       setIsLoading(true);
       try {
-        const matricNumber = generateMatricNumber(newStudent.department, newStudent.level, newStudent.admissionYear);
+        const matricNumber = generateMatricNumber(newStudent.department, newStudent.academicYearId, newStudent.level);
         const defaultPassword = newStudent.surname.toLowerCase();
         const searchableIndex = [
           newStudent.firstName.toLowerCase(),
@@ -221,11 +279,12 @@ const StudentManagementPage = () => {
     }
   };
 
-  const generateMatricNumber = (departmentId, level, admissionYear) => {
+  const generateMatricNumber = (departmentId, academicYearId, level) => {
     const deptCode = departments.find(d => d.id === departmentId)?.code || 'UNK';
-    const levelCode = level.replace('ND', '').replace('HND', '');
+    const yearCode = academicYears.find(y => y.id === academicYearId)?.session.slice(-2) || 'XX';
+    const levelCode = level.includes('ND') ? 'ND' : 'HND';
     const randomNum = Math.floor(1000 + Math.random() * 9000);
-    return `${admissionYear.slice(-2)}/${deptCode}/${randomNum}`;
+    return `${yearCode}/${deptCode}/${levelCode}/${randomNum}`;
   };
 
   const uploadStudentPhoto = async (file, matricNumber) => {
@@ -317,39 +376,47 @@ const StudentManagementPage = () => {
   const AdvancedSearchAndFilter = () => (
     <Accordion>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography>Advanced Search and Filters</Typography>
+        <Typography variant="h6">Advanced Search and Filters</Typography>
       </AccordionSummary>
       <AccordionDetails>
         <Grid container spacing={2}>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Search"
-              variant="outlined"
-              value={filters.searchTerm}
-              onChange={(e) => handleFilterChange({...filters, searchTerm: e.target.value})}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth>
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth variant="outlined">
               <InputLabel>Department</InputLabel>
               <Select
                 value={filters.department}
                 onChange={(e) => handleFilterChange({...filters, department: e.target.value})}
+                label="Department"
               >
                 <MenuItem value="">All Departments</MenuItem>
                 {departments.map(dept => (
-                  <MenuItem key={dept.id} value={dept.id}>{dept.name}</MenuItem>
+                  <MenuItem key={dept.id} value={dept.name}>{dept.name}</MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth>
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth variant="outlined">
+              <InputLabel>Academic Year</InputLabel>
+              <Select
+                value={filters.academicYear}
+                onChange={(e) => handleFilterChange({...filters, academicYear: e.target.value})}
+                label="Academic Year"
+              >
+                <MenuItem value="">All Academic Years</MenuItem>
+                {academicYears.map(year => (
+                  <MenuItem key={year.id} value={year.id}>{year.session}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth variant="outlined">
               <InputLabel>Level</InputLabel>
               <Select
                 value={filters.level}
                 onChange={(e) => handleFilterChange({...filters, level: e.target.value})}
+                label="Level"
               >
                 <MenuItem value="">All Levels</MenuItem>
                 <MenuItem value="ND1">ND1</MenuItem>
@@ -359,10 +426,20 @@ const StudentManagementPage = () => {
               </Select>
             </FormControl>
           </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Button 
+              fullWidth 
+              variant="contained" 
+              color="primary" 
+              onClick={() => handleFilterChange({department: '', academicYear: '', level: '', searchTerm: ''})}
+            >
+              Clear Filters
+            </Button>
+          </Grid>
         </Grid>
         <Box mt={2}>
           {Object.entries(filters).map(([key, value]) => 
-            value && (
+            value && key !== 'searchTerm' && (
               <Chip 
                 key={key}
                 label={`${key}: ${value}`}
@@ -381,16 +458,18 @@ const StudentManagementPage = () => {
 
     return (
       <Dialog open={openProfileDialog} onClose={onClose} maxWidth="md" fullWidth>
-        <DialogTitle>Student Profile</DialogTitle>
+        <DialogTitle>
+          <Typography variant="h5">Student Profile</Typography>
+        </DialogTitle>
         <DialogContent>
-          <Grid container spacing={2}>
+          <Grid container spacing={3}>
             <Grid item xs={12} sm={4}>
               <Card>
                 <CardMedia
                   component="img"
-                  height="240"
+                  height="300"
                   image={student.photoUrl || '/placeholder-avatar.jpg'}
-                  alt={student.name}
+                  alt={`${student.firstName} ${student.surname}`}
                 />
                 <CardContent>
                   <Typography variant="h6">{`${student.firstName} ${student.middleName} ${student.surname}`}</Typography>
@@ -403,28 +482,51 @@ const StudentManagementPage = () => {
                 <Tab label="Personal Info" />
                 <Tab label="Academic Info" />
               </Tabs>
-              {activeTab === 0 && (
-                <Box p={2}>
-                  <Typography><strong>Email:</strong> {student.email}</Typography>
-                  <Typography><strong>Date of Birth:</strong> {new Date(student.dob).toLocaleDateString()}</Typography>
-                  {/* Add more personal information fields here */}
-                </Box>
-              )}
-              {activeTab === 1 && (
-                <Box p={2}>
-                  <Typography><strong>Department:</strong> {departments.find(d => d.id === student.department)?.name}</Typography>
-                  <Typography><strong>Level:</strong> {student.level}</Typography>
-                  <Typography><strong>Academic Period:</strong> {academicPeriods.find(p => p.id === student.academicPeriodId)?.name}</Typography>
-                  <Typography><strong>Program Type:</strong> {student.programType}</Typography>
-                  <Typography><strong>Admission Year:</strong> {student.admissionYear}</Typography>
-                  {/* Add more academic information fields here */}
-                </Box>
-              )}
+              <Box mt={2}>
+                {activeTab === 0 && (
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography><strong>Gender:</strong> {student.gender}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography><strong>Date of Birth:</strong> {new Date(student.dob).toLocaleDateString()}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography><strong>Email:</strong> {student.email}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography><strong>Phone Number:</strong> {student.phoneNumber}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography><strong>Marital Status:</strong> {student.maritalStatus}</Typography>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Typography><strong>Permanent Address:</strong> {student.permanentAddress}</Typography>
+                    </Grid>
+                  </Grid>
+                )}
+                {activeTab === 1 && (
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography><strong>Department:</strong> {student.department}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography><strong>Academic Year:</strong> {academicYears.find(y => y.id === student.academicYearId)?.session}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography><strong>Level:</strong> {student.level}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography><strong>Program Type:</strong> {student.programType}</Typography>
+                    </Grid>
+                  </Grid>
+                )}
+              </Box>
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>Close</Button>
+          <Button onClick={onClose} color="primary">Close</Button>
         </DialogActions>
       </Dialog>
     );
@@ -466,6 +568,21 @@ const StudentManagementPage = () => {
         />
       </Grid>
       <Grid item xs={12} sm={6}>
+        <FormControl fullWidth required error={!!errors.gender}>
+          <InputLabel>Gender</InputLabel>
+          <Select
+            name="gender"
+            value={newStudent.gender}
+            onChange={handleInputChange}
+          >
+            <MenuItem value="Male">Male</MenuItem>
+            <MenuItem value="Female">Female</MenuItem>
+            <MenuItem value="Other">Other</MenuItem>
+          </Select>
+          {errors.gender && <Typography color="error">{errors.gender}</Typography>}
+        </FormControl>
+      </Grid>
+      <Grid item xs={12} sm={6}>
         <LocalizationProvider dateAdapter={AdapterDateFns}>
           <DatePicker
             label="Date of Birth"
@@ -497,6 +614,48 @@ const StudentManagementPage = () => {
         />
       </Grid>
       <Grid item xs={12} sm={6}>
+        <TextField
+          fullWidth
+          name="phoneNumber"
+          label="Phone Number"
+          value={newStudent.phoneNumber}
+          onChange={handleInputChange}
+          error={!!errors.phoneNumber}
+          helperText={errors.phoneNumber}
+          required
+        />
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <FormControl fullWidth required error={!!errors.maritalStatus}>
+          <InputLabel>Marital Status</InputLabel>
+          <Select
+            name="maritalStatus"
+            value={newStudent.maritalStatus}
+            onChange={handleInputChange}
+          >
+            <MenuItem value="Single">Single</MenuItem>
+            <MenuItem value="Married">Married</MenuItem>
+            <MenuItem value="Divorced">Divorced</MenuItem>
+            <MenuItem value="Widowed">Widowed</MenuItem>
+          </Select>
+          {errors.maritalStatus && <Typography color="error">{errors.maritalStatus}</Typography>}
+        </FormControl>
+      </Grid>
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          name="permanentAddress"
+          label="Permanent Address"
+          multiline
+          rows={3}
+          value={newStudent.permanentAddress}
+          onChange={handleInputChange}
+          error={!!errors.permanentAddress}
+          helperText={errors.permanentAddress}
+          required
+        />
+      </Grid>
+      <Grid item xs={12} sm={6}>
         <FormControl fullWidth required error={!!errors.department}>
           <InputLabel>Department</InputLabel>
           <Select
@@ -505,10 +664,25 @@ const StudentManagementPage = () => {
             onChange={handleInputChange}
           >
             {departments.map(dept => (
-              <MenuItem key={dept.id} value={dept.id}>{dept.name}</MenuItem>
+              <MenuItem key={dept.id} value={dept.name}>{dept.name}</MenuItem>
             ))}
           </Select>
           {errors.department && <Typography color="error">{errors.department}</Typography>}
+        </FormControl>
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <FormControl fullWidth required error={!!errors.academicYearId}>
+          <InputLabel>Academic Year</InputLabel>
+          <Select
+            name="academicYearId"
+            value={newStudent.academicYearId}
+            onChange={handleInputChange}
+          >
+            {academicYears.map(year => (
+              <MenuItem key={year.id} value={year.id}>{year.session}</MenuItem>
+            ))}
+          </Select>
+          {errors.academicYearId && <Typography color="error">{errors.academicYearId}</Typography>}
         </FormControl>
       </Grid>
       <Grid item xs={12} sm={6}>
@@ -526,33 +700,6 @@ const StudentManagementPage = () => {
           </Select>
           {errors.level && <Typography color="error">{errors.level}</Typography>}
         </FormControl>
-      </Grid>
-      <Grid item xs={12} sm={6}>
-        <FormControl fullWidth required error={!!errors.academicPeriodId}>
-          <InputLabel>Academic Period</InputLabel>
-          <Select
-            name="academicPeriodId"
-            value={newStudent.academicPeriodId}
-            onChange={handleInputChange}
-          >
-            {academicPeriods.map(period => (
-              <MenuItem key={period.id} value={period.id}>{period.name} - {period.session}</MenuItem>
-            ))}
-          </Select>
-          {errors.academicPeriodId && <Typography color="error">{errors.academicPeriodId}</Typography>}
-        </FormControl>
-      </Grid>
-      <Grid item xs={12} sm={6}>
-        <TextField
-          fullWidth
-          name="admissionYear"
-          label="Admission Year"
-          value={newStudent.admissionYear}
-          onChange={handleInputChange}
-          error={!!errors.admissionYear}
-          helperText={errors.admissionYear}
-          required
-        />
       </Grid>
       <Grid item xs={12} sm={6}>
         <FormControl fullWidth required error={!!errors.programType}>
@@ -582,7 +729,7 @@ const StudentManagementPage = () => {
             Upload Photo
           </Button>
         </label>
-        {photoFile && <span>{photoFile.name}</span>}
+        {photoFile && <span style={{ marginLeft: 10 }}>{photoFile.name}</span>}
         {selectedStudent && selectedStudent.photoUrl && !photoFile && (
           <img src={selectedStudent.photoUrl} alt="Student" style={{ width: 100, height: 100, objectFit: 'cover', marginLeft: 10 }} />
         )}
@@ -592,13 +739,30 @@ const StudentManagementPage = () => {
 
   return (
     <AdminLayout>
-      <Box p={3}>
-        <Typography variant="h4"className='text-black'  gutterBottom>Student Management</Typography>
-        
-        <AdvancedSearchAndFilter />
+      <Box>
+        <StyledAppBar position="static">
+          <Toolbar>
+            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+              Student Management
+            </Typography>
+            <StyledSearch>
+              <SearchIconWrapper>
+                <SearchIcon />
+              </SearchIconWrapper>
+              <StyledInputBase
+                placeholder="Search…"
+                inputProps={{ 'aria-label': 'search' }}
+                value={filters.searchTerm}
+                onChange={(e) => handleFilterChange({...filters, searchTerm: e.target.value})}
+              />
+            </StyledSearch>
+          </Toolbar>
+        </StyledAppBar>
 
-        <Box my={2} display="flex" justifyContent="space-between" alignItems="center">
-          <Box>
+        <Box p={3}>
+          <AdvancedSearchAndFilter />
+
+          <Box my={2} display="flex" justifyContent="space-between" alignItems="center">
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -608,12 +772,15 @@ const StudentManagementPage = () => {
                   firstName: '',
                   middleName: '',
                   surname: '',
+                  gender: '',
                   dob: null,
                   email: '',
+                  phoneNumber: '',
+                  maritalStatus: '',
+                  permanentAddress: '',
                   department: '',
+                  academicYearId: '',
                   level: '',
-                  academicPeriodId: '',
-                  admissionYear: '',
                   programType: '',
                 });
                 setPhotoFile(null);
@@ -624,152 +791,168 @@ const StudentManagementPage = () => {
               Add New Student
             </Button>
             {selectedStudents.length > 0 && (
-              <>
+              <Box>
                 <Button
                   variant="outlined"
                   color="error"
                   startIcon={<DeleteIcon />}
                   onClick={handleBulkDelete}
-                  style={{ marginLeft: 8 }}
+                  sx={{ mr: 1 }}
                 >
                   Delete Selected ({selectedStudents.length})
                 </Button>
                 <Button
-                  variant="outlined"
-                  startIcon={<FileDownloadIcon />}
-                  style={{ marginLeft: 8 }}
+                  variant="outlined"startIcon={<FileDownloadIcon />}
                   onClick={() => {/* Implement export functionality */}}
                 >
                   Export Selected
                 </Button>
-              </>
+              </Box>
             )}
           </Box>
-        </Box>
 
-        {isLoading ? (
-          <CircularProgress />
-        ) : (
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      indeterminate={selectedStudents.length > 0 && selectedStudents.length < students.length}
-                      checked={students.length > 0 && selectedStudents.length === students.length}
-                      onChange={handleSelectAllClick}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <TableSortLabel
-                      active={orderByField === 'matricNumber'}
-                      direction={orderByField === 'matricNumber' ? orderDirection : 'asc'}
-                      onClick={() => handleSort('matricNumber')}
-                    >
-                      Matric Number
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell>
-                    <TableSortLabel
-                      active={orderByField === 'surname'}
-                      direction={orderByField === 'surname' ? orderDirection : 'asc'}
-                      onClick={() => handleSort('surname')}
-                    >
-                      Name
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell>Department</TableCell>
-                  <TableCell>Level</TableCell>
-                  <TableCell>Academic Period</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {students.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={selectedStudents.indexOf(student.id) !== -1}
-                        onChange={() => handleSelectStudent(student.id)}
-                      />
-                    </TableCell>
-                    <TableCell>{student.matricNumber}</TableCell>
-                    <TableCell>{`${student.surname}, ${student.firstName} ${student.middleName}`}</TableCell>
-                    <TableCell>{departments.find(d => d.id === student.department)?.name}</TableCell>
-                    <TableCell>{student.level}</TableCell>
-                    <TableCell>{academicPeriods.find(p => p.id === student.academicPeriodId)?.name}</TableCell>
-                    <TableCell>
-                      <Tooltip title="View Profile">
-                        <IconButton onClick={() => handleViewProfile(student)}>
-                          <SearchIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Edit">
-                        <IconButton onClick={() => {
-                          setSelectedStudent(student);
-                          setNewStudent({...student});
-                          setPhotoFile(null);
-                          setErrors({});
-                          setOpenDialog(true);
-                        }}>
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete">
-                        <IconButton onClick={() => handleDeleteStudent(student.id)}>
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <TablePagination
-              rowsPerPageOptions={[5, 10, 25]}
-              component="div"
-              count={totalStudents}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onPageChange={handleChangePage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
+          {isLoading ? (
+            <Box display="flex" justifyContent="center" my={4}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <Paper elevation={3}>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          indeterminate={selectedStudents.length > 0 && selectedStudents.length < students.length}
+                          checked={students.length > 0 && selectedStudents.length === students.length}
+                          onChange={handleSelectAllClick}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={orderByField === 'matricNumber'}
+                          direction={orderByField === 'matricNumber' ? orderDirection : 'asc'}
+                          onClick={() => handleSort('matricNumber')}
+                        >
+                          Matric Number
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={orderByField === 'surname'}
+                          direction={orderByField === 'surname' ? orderDirection : 'asc'}
+                          onClick={() => handleSort('surname')}
+                        >
+                          Name
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>Department</TableCell>
+                      <TableCell>Level</TableCell>
+                      <TableCell>Academic Year</TableCell>
+                      <TableCell>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {students.map((student) => (
+                      <TableRow key={student.id} hover>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={selectedStudents.indexOf(student.id) !== -1}
+                            onChange={() => handleSelectStudent(student.id)}
+                          />
+                        </TableCell>
+                        <TableCell>{student.matricNumber}</TableCell>
+                        <TableCell>
+                          <Box display="flex" alignItems="center">
+                            <Avatar src={student.photoUrl} sx={{ mr: 2 }} />
+                            {`${student.surname}, ${student.firstName} ${student.middleName}`}
+                          </Box>
+                        </TableCell>
+                        <TableCell>{student.department}</TableCell>
+                        <TableCell>{student.level}</TableCell>
+                        <TableCell>{academicYears.find(y => y.id === student.academicYearId)?.session}</TableCell>
+                        <TableCell>
+                          <Tooltip title="View Profile">
+                            <IconButton onClick={() => handleViewProfile(student)}>
+                              <SearchIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Edit">
+                            <IconButton onClick={() => {
+                              setSelectedStudent(student);
+                              setNewStudent({...student});
+                              setPhotoFile(null);
+                              setErrors({});
+                              setOpenDialog(true);
+                            }}>
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <IconButton onClick={() => handleDeleteStudent(student.id)}>
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <TablePagination
+                rowsPerPageOptions={[5, 10, 25]}
+                component="div"
+                count={totalStudents}
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+              />
+            </Paper>
+          )}
+
+          <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+            <DialogTitle>
+              {selectedStudent ? 'Edit Student' : 'Add New Student'}
+            </DialogTitle>
+            <DialogContent>
+              <Box my={2}>
+                {renderStudentForm()}
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+              <Button 
+                onClick={selectedStudent ? handleEditStudent : handleAddStudent} 
+                disabled={isLoading}
+                variant="contained"
+                color="primary"
+              >
+                {isLoading ? <CircularProgress size={24} /> : (selectedStudent ? 'Update' : 'Add')}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {selectedProfileStudent && (
+            <StudentProfileView
+              student={selectedProfileStudent}
+              onClose={() => {
+                setOpenProfileDialog(false);
+                setSelectedProfileStudent(null);
+              }}
             />
-          </TableContainer>
-        )}
+          )}
 
-        <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-          <DialogTitle>{selectedStudent ? 'Edit Student' : 'Add New Student'}</DialogTitle>
-          <DialogContent>
-            {renderStudentForm()}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-            <Button onClick={selectedStudent ? handleEditStudent : handleAddStudent} disabled={isLoading}>
-              {isLoading ? <CircularProgress size={24} /> : (selectedStudent ? 'Update' : 'Add')}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {selectedProfileStudent && (
-          <StudentProfileView
-            student={selectedProfileStudent}
-            onClose={() => {
-              setOpenProfileDialog(false);
-              setSelectedProfileStudent(null);
-            }}
-          />
-        )}
-
-        <Snackbar 
-          open={snackbar.open} 
-          autoHideDuration={6000} 
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-        >
-          <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
+          <Snackbar 
+            open={snackbar.open} 
+            autoHideDuration={6000} 
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
+          >
+            <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+              {snackbar.message}
+            </Alert>
+          </Snackbar>
+        </Box>
       </Box>
     </AdminLayout>
   );
